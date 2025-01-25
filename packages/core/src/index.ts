@@ -17,14 +17,14 @@ export const buildAccountId = (
 
 export type Side = 'ask' | 'bid';
 
-const TIME_IN_FORCES = [
+export const TIME_IN_FORCES = [
   'default',
   'immediate_or_cancel',
   'fill_or_kill',
   'post_only',
 ] as const;
 
-const SELF_TRADE_BEHAVIORS = [
+export const SELF_TRADE_BEHAVIORS = [
   // cancel the maker order and continue to fill taker
   'cancel_provide',
   // cancel the remaining of the taker, stop filling
@@ -36,11 +36,11 @@ const SELF_TRADE_BEHAVIORS = [
 ] as const;
 
 export type TimeInForce = (typeof TIME_IN_FORCES)[number];
-export type SeltTradeBehavior = (typeof SELF_TRADE_BEHAVIORS)[number];
+export type SelfTradeBehavior = (typeof SELF_TRADE_BEHAVIORS)[number];
 
 export type OrderFlag = {
   timeInForce: TimeInForce;
-  selfTradeBehavior: SeltTradeBehavior;
+  selfTradeBehavior: SelfTradeBehavior;
   reduceOnly: boolean;
   expiresAt: number | undefined | null;
   isMarketOrder: boolean;
@@ -82,3 +82,16 @@ export type OrderStatus =
   | 'partial_filled'
   | 'canceled'
   | 'conditional_canceled';
+
+export const DECIMALS: number = 8;
+
+export type TriggerCondition = {
+  mark_price?: {
+    above?: string;
+    below?: string;
+  };
+  last_price?: {
+    above?: string;
+    below?: string;
+  };
+};

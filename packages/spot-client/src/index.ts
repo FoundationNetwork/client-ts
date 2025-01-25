@@ -21,8 +21,7 @@ import {
 
 type Account = LocalAccount | SmartAccount;
 
-export const TESTNET_RPC_URL =
-  'https://testnet-rpc.foundation.network/spot';
+export const TESTNET_RPC_URL = 'https://testnet-rpc.foundation.network/spot';
 
 export const TESTNET_API_URL = 'https://testnet-api.foundation.network';
 

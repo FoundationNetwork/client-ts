@@ -1,44 +1,129 @@
 import { test } from 'vitest';
 import { FoundationPerpClient } from './index';
-import { privateKeyToAccount } from 'viem/accounts';
+import { PrivateKeyAccount, privateKeyToAccount } from 'viem/accounts';
+import {
+  ClientAccount,
+  ClientMarketConfig,
+  ClientMarketPrice,
+  ClientMarketState,
+  ClientOpenOrder,
+  ClientOrderbook,
+  ClientPlaceOrder,
+} from './types';
+import { TESTNET_RPC_URL } from './engine';
+import { buildAccountId, ProductType } from '@foundation-network/core';
+import { formatUnits, Hash, parseUnits } from 'viem';
+import { DECIMALS } from '@foundation-network/core/src';
 
-test('should get orders', async () => {
-  const signer = privateKeyToAccount(
+test('test', async () => {
+  const signer: PrivateKeyAccount = privateKeyToAccount(
     '0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356',
   );
-
-  
-  const client = new FoundationPerpClient(signer, {
-    rpcUrl: 'http://localhost:8096',
-  });
-  console.log(client.subaccount)
-
-  const orders = await client.getPendingOrders('CRYPTO_BTC_PERP');
-  console.log('orders', orders);
-});
-
-test('should get account info', async () => {
-  const signer = privateKeyToAccount(
-    '0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356',
+  const accountId: Hash = buildAccountId(
+    signer.address,
+    ProductType.Perpetual,
+    1,
+    0,
+  );
+  const client: FoundationPerpClient = new FoundationPerpClient(
+    TESTNET_RPC_URL,
   );
 
-  const client = new FoundationPerpClient(signer, {
-    rpcUrl: 'http://localhost:8096',
-  });
+  // get market config
+  const marketConfigs: ClientMarketConfig[] = await client.getMarketConfigs();
+  console.log(marketConfigs);
 
-  const info = await client.getAccountInfo();
-  console.log('info', info);
-});
+  const now = Date.now();
+  for (const marketConfig of marketConfigs) {
+    if (
+      !marketConfig.isOpen ||
+      now < marketConfig.availableFrom ||
+      (marketConfig.unavailableAfter && now >= marketConfig.unavailableAfter)
+    )
+      continue;
 
-test('should query depth', async () => {
-  const signer = privateKeyToAccount(
-    '0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356',
-  );
+    // get market price
+    const marketPrice: ClientMarketPrice = await client.getMarketPrice(
+      marketConfig.id,
+    );
+    console.log(marketPrice);
 
-  const client = new FoundationPerpClient(signer, {
-    rpcUrl: 'http://localhost:8096',
-  });
+    const indexPrice = parseUnits(marketPrice.indexPrice, DECIMALS);
+    const tickSize = parseUnits(marketConfig.tickSize, DECIMALS);
+    const amount = formatUnits(
+      parseUnits(marketConfig.stepSize, DECIMALS) * 100n,
+      DECIMALS,
+    );
+    const sellPrice = (indexPrice / tickSize) * tickSize + tickSize;
+    const buyPrice = (indexPrice / tickSize) * tickSize;
 
-  const depth = await client.getOrderbookDepth('CRYPTO_BTC_PERP', 100);
-  console.log('depth', depth);
+    const orders: ClientPlaceOrder[] = [
+      // place order with trigger condition
+      {
+        accountId,
+        marketId: marketConfig.id,
+        side: 'ask',
+        price: formatUnits(sellPrice, DECIMALS),
+        amount,
+        triggerCondition: {
+          last_price: {
+            below: formatUnits(sellPrice - sellPrice / 10n, DECIMALS),
+          },
+        },
+      },
+      // place order without trigger condition
+      {
+        accountId,
+        marketId: marketConfig.id,
+        side: 'bid',
+        price: formatUnits(buyPrice, DECIMALS),
+        amount,
+      },
+    ];
+    console.log(orders);
+
+    // place order
+    const placedOrderIds: number[] = await Promise.all(
+      orders.map((order) => client.placeOrder(signer, order)),
+    );
+    console.log(placedOrderIds);
+
+    // get all order
+    const openOrders: ClientOpenOrder[] = await client.getOpenOrdersByAccount(
+      marketConfig.id,
+      accountId,
+    );
+    console.log(openOrders);
+
+    // get orderbook
+    const orderbook: ClientOrderbook | null = await client.getOrderbook(
+      marketConfig.id,
+    );
+    console.log(orderbook);
+
+    for (const placedOrderId of placedOrderIds) {
+      // get open order by id
+      const openOrder: ClientOpenOrder | null = await client.getOpenOrderById(
+        marketConfig.id,
+        placedOrderId,
+      );
+      console.log(openOrder);
+
+      // cancel order
+      const canceledOrderId: number = await client.cancelOrder(signer, {
+        accountId,
+        marketId: marketConfig.id,
+        orderId: placedOrderId.toString(),
+      });
+      console.log(canceledOrderId);
+    }
+  }
+
+  // get market state
+  const marketStates: ClientMarketState[] = await client.getMarketStates();
+  console.log(marketStates);
+
+  // get account (balance & position)
+  const account: ClientAccount = await client.getAccount(accountId);
+  console.log(account);
 });

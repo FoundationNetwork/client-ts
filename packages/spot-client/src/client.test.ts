@@ -9,7 +9,6 @@ test('should get orders', async () => {
 
   const client = new FoundationSpotClient(signer, {
     rpcUrl: 'http://localhost:8096',
-    apiUrl: ''
+    apiUrl: '',
   });
-
 });
